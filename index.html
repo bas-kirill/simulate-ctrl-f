@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Тестовое задание</title>
+</head>
+<style>
+  .search {
+    margin-bottom: 5px;
+  }
+
+  .editor {
+    height: 100px;
+    overflow: auto;
+  }
+
+  body>.search,
+  body>.editor {
+    width: 300px;
+    border: solid 1px black;
+    border-radius: 5px;
+    padding: 5px;
+  }
+
+  .highlight {
+    background-color: yellow;
+  }
+</style>
+
+<body>
+  <input id="search" type="text" class="search" placeholder="Search for...">
+  <div id="editor" contenteditable="true" class="editor">
+    Текст в котором будет осуществляться поиск
+  </div>
+</body>
+<script>
+  function getSegments(str, substr) {
+    let arr = [];
+    if (substr == '')
+      return arr;
+
+    let pos = 0;
+    while (true) {
+      let foundPos = str.indexOf(substr, pos);
+      if (foundPos == -1) break;
+
+      let rightBorder = foundPos + substr.length - 1;
+      arr.push({foundPos, rightBorder});
+      pos = foundPos + 1; 
+    }
+
+    return arr;
+  }
+
+  function intersectSegments(listIdx, editor) {
+    function ltrim(str) {
+      if (!str) return str;
+      return str.replace(/^\s+/g, '');
+    }
+
+    let n = listIdx.length;
+    let used = new Array(n);
+    for (let i = 0; i < n; ++i)
+      used[i] = false;
+
+    let x = [];
+    for (let i = 0; i < n; ++i) {
+      let curLeft = listIdx[i].foundPos, curRight = listIdx[i].rightBorder;
+      if (used[i])
+        continue;
+      used[i] = true;
+      for (let j = i + 1; j < n; ++j) {
+        if (used[j])
+          continue;
+        let left = listIdx[j].foundPos, right = listIdx[j].rightBorder;
+        if (left <= curLeft && curRight <= right) {
+          used[j] = true;
+          curLeft = left, curRight = right;
+        } else if (curLeft <= left && left <= curRight && curRight <= right) {
+          used[j] = true;
+          curRight = right;
+        } else if (left <= curLeft && curLeft <= right && right <= curRight) {
+          used[j] = true;
+          curLeft = left;
+        }
+      }
+      x.push({curLeft, curRight});
+    }
+
+    let textNoFormatting = ltrim(editor.textContent);
+    let newStr = "";
+    let lastIdx = 0;
+    for (let i = 0; i < x.length; ++i) {
+      while (lastIdx != x[i].curLeft) {
+        newStr += textNoFormatting[lastIdx];
+        lastIdx++;
+      }
+      newStr += '<span class="highlight">';
+      newStr += textNoFormatting.substr(lastIdx, x[i].curRight - x[i].curLeft + 1);
+      newStr += '</span>';
+      lastIdx = x[i].curRight + 1;
+    }
+    newStr += textNoFormatting.substr(lastIdx, textNoFormatting.length - lastIdx);
+    return newStr;
+  }
+
+  function getCursorPosition(parent) {
+    let selection = document.getSelection();
+    let range = new Range;
+    range.setStart(parent, 0);
+    range.setEnd(selection.anchorNode, selection.anchorOffset);
+    return range.toString().length;
+  }
+
+  function setCursorPosition(parent, position) {
+    let child = parent.firstChild;
+    while (position > 0) {
+      let length = child.textContent.length;
+      if (position > length) {
+        position -= length;
+        child = child.nextSibling;
+      } else {
+        if (child.nodeType == 3) return document.getSelection().collapse(child, position);
+        child = child.firstChild;
+      }
+    }
+  }
+
+  const search = document.getElementById('search');
+  const editor = document.getElementById('editor');
+
+  search.addEventListener("keyup", (e) => {
+    let filter = e.target.value;
+    let text = editor.textContent.trim().toLowerCase();
+
+    let listIdx = getSegments(text, filter);
+
+    let newStr = intersectSegments(listIdx, editor);
+
+    editor.innerHTML = newStr;
+  });
+
+  editor.addEventListener("input", (e) => {
+    let cursorIdx = getCursorPosition(editor);
+    let filter = search.value;
+    let text = editor.textContent.toLowerCase();
+
+    let listIdx = getSegments(text, filter);
+    let newStr = intersectSegments(listIdx, editor);
+
+    editor.innerHTML = newStr;
+
+    setCursorPosition(editor, cursorIdx);
+  });
+
+  // TODO: Подсвечивать текст в editor который совпадает со строкой введенной в поле search по аналогии с Ctrl+F в браузере
+  // Ограничения:
+  // * нельзя использовать сторонние библиотеки
+  // * текст должен подсвечиваться динамически по мере ввода и в editor и в search
+  // * если текст перестал совпадать с искомой строкой, то подсветка должна пропадать
+
+</script>
+</html>
